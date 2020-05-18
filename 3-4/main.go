@@ -1,22 +1,30 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 func main() {
-	c1 := make(chan interface{})
-	close(c1)
-	c2 := make(chan interface{})
-	close(c2)
+	done := make(chan interface{})
+	go func() {
+		time.Sleep(5 * time.Second)
+		close(done)
+	}()
 
-	var c1Count, c2Count int
-	for i := 1000; i >= 0; i-- {
+	workCounter := 0
+loop:
+	for {
 		select {
-		case <-c1:
-			c1Count++
-		case <-c2:
-			c2Count++
+		case <-done:
+			break loop
+		default:
 		}
+
+		// Simulate work
+		workCounter++
+		time.Sleep(1 * time.Second)
 	}
 
-	fmt.Printf("c1Count: %d\nc2Count: %d\n", c1Count, c2Count)
+	fmt.Printf("Achieved %v cycles of work before signalled to stop. \n", workCounter)
 }
