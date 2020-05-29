@@ -1,39 +1,28 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+	"runtime"
+	"sync"
+	"time"
+)
 
 func main() {
-	repeat := func(done <-chan interface{}, values ...interface{}) <-chan interface{} {
+	repeatFn := func(done <-chan interface{}, fn func() interface{}) <-chan interface{} {
 		valueStream := make(chan interface{})
 		go func() {
 			defer close(valueStream)
 			for {
-				for _, v := range values {
-					select {
-					case <-done:
-						return
-					case valueStream <- v:
-					}
+				select {
+				case <-done:
+					return
+				case valueStream <- fn():
 				}
 			}
 		}()
 		return valueStream
 	}
-
-	//repeatFn := func(done <-chan interface{}, fn func() interface{}) <-chan interface{} {
-	//	valueStream := make(chan interface{})
-	//	go func() {
-	//		defer close(valueStream)
-	//		for {
-	//			select {
-	//			case <-done:
-	//				return
-	//			case valueStream <- fn():
-	//			}
-	//		}
-	//	}()
-	//	return valueStream
-	//}
 
 	take := func(done <-chan interface{}, valueStream <-chan interface{}, num int) <-chan interface{} {
 		takeStream := make(chan interface{})
@@ -50,28 +39,96 @@ func main() {
 		return takeStream
 	}
 
-	toString := func(done <-chan interface{}, valueStream <-chan interface{}) <-chan string {
-		stringStream := make(chan string)
+	toInt := func(done <-chan interface{}, valueStream <-chan interface{}) <-chan int {
+		intStream := make(chan int)
 		go func() {
-			defer close(stringStream)
+			defer close(intStream)
 			for v := range valueStream {
 				select {
 				case <-done:
 					return
-				case stringStream <- v.(string):
+				case intStream <- v.(int):
 				}
 			}
 		}()
-		return stringStream
+		return intStream
+	}
+
+	primeFinder := func(done <-chan interface{}, intStream <-chan int) <-chan interface{} {
+		primeStream := make(chan interface{})
+		go func() {
+			defer close(primeStream)
+			for integer := range intStream {
+				integer -= 1
+				prime := true
+				for divisor := integer - 1; divisor > 1; divisor-- {
+					if integer%divisor == 0 {
+						prime = false
+						break
+					}
+				}
+
+				if prime {
+					select {
+					case <-done:
+						return
+					case primeStream <- integer:
+					}
+				}
+			}
+		}()
+		return primeStream
+	}
+
+	fanIn := func(done <-chan interface{}, channels ...<-chan interface{}) <-chan interface{} {
+		var wg sync.WaitGroup
+		multiplexedStream := make(chan interface{})
+
+		multiplex := func(c <-chan interface{}) {
+			defer wg.Done()
+			for i := range c {
+				select {
+				case <-done:
+					return
+				case multiplexedStream <- i:
+				}
+			}
+		}
+
+		wg.Add(len(channels))
+		for _, c := range channels {
+			go multiplex(c)
+		}
+
+		go func() {
+			wg.Wait()
+			close(multiplexedStream)
+		}()
+
+		return multiplexedStream
 	}
 
 	done := make(chan interface{})
 	defer close(done)
 
-	var message string
-	for token := range toString(done, take(done, repeat(done, "I", "am. "), 5)) {
-		message += token
+	start := time.Now()
+
+	r := func() interface{} { return rand.Intn(50000000) }
+
+	randIntStream := toInt(done, repeatFn(done, r))
+
+	numFinders := runtime.NumCPU()
+	fmt.Printf("Spinning up %d prime finders.\n", numFinders)
+	finers := make([]<-chan interface{}, numFinders)
+	fmt.Println("Primes:")
+	for i := 0; i < numFinders; i++ {
+		finers[i] = primeFinder(done, randIntStream)
 	}
 
-	fmt.Printf("message: %s...", message)
+	for prime := range take(done, fanIn(done, finers...), 10) {
+		fmt.Printf("\t%d\n", prime)
+	}
+
+	fmt.Printf("Search took: %v", time.Since(start))
+
 }
