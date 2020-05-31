@@ -9,16 +9,31 @@ func main() {
 	ProcessRequest("jane", "abc123")
 }
 
-func ProcessRequest(userId, authToken string) {
-	ctx := context.WithValue(context.Background(), "userId", userId)
-	ctx = context.WithValue(ctx, "authToken", authToken)
-	HandleRequest(ctx)
+type ctxKey int
+
+const (
+	ctxUserID ctxKey = iota
+	ctxAuthToken
+)
+
+func UserID(c context.Context) string {
+	return c.Value(ctxUserID).(string)
 }
 
-func HandleRequest(ctx context.Context) {
+func AuthToken(c context.Context) string {
+	return c.Value(ctxAuthToken).(string)
+}
+
+func ProcessRequest(userId, authToken string) {
+	ctx := context.WithValue(context.Background(), ctxUserID, userId)
+	ctx = context.WithValue(ctx, ctxAuthToken, authToken)
+	HandleResponse(ctx)
+}
+
+func HandleResponse(ctx context.Context) {
 	fmt.Printf(
 		"handling response for %v (%v)",
-		ctx.Value("userId"),
-		ctx.Value("authToken"),
+		UserID(ctx),
+		AuthToken(ctx),
 	)
 }
