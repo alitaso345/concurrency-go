@@ -51,7 +51,7 @@ func printFarewell(ctx context.Context) interface{} {
 }
 
 func genGreeting(ctx context.Context) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	switch locale, err := locale(ctx); {
@@ -74,6 +74,12 @@ func genFarewell(ctx context.Context) (string, error) {
 }
 
 func locale(ctx context.Context) (string, error) {
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Sub(time.Now().Add(10*time.Second)) <= 0 {
+			return "", context.DeadlineExceeded
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
