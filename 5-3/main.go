@@ -11,8 +11,8 @@ func main() {
 		results := make(chan time.Time)
 
 		go func() {
-			defer close(heartbeat)
-			defer close(results)
+			//defer close(heartbeat)
+			//defer close(results)
 
 			pulse := time.Tick(pulseInterval)
 			workGen := time.Tick(2 * pulseInterval)
@@ -37,7 +37,7 @@ func main() {
 				}
 			}
 
-			for {
+			for i := 0; i < 2; i++ {
 				select {
 				case <-done:
 					return
@@ -70,6 +70,7 @@ func main() {
 			}
 			fmt.Printf("results %v\n", r.Second())
 		case <-time.After(timeout):
+			fmt.Println("worker goroutine is not healthy")
 			return
 		}
 	}
